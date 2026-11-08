@@ -1,6 +1,6 @@
 """Milestone 1 dashboard: affordable housing vs. street safety in NYC (ZIP x year).
 
-Run locally:  python app.py          Deploy (Render):  gunicorn app:server
+Run locally:  python app.py          Deploy: gunicorn app:server (or Vercel)
 """
 import os
 import numpy as np
@@ -184,5 +184,8 @@ def generate_report(n, mode, boroughs, years, group, zip_code):
     ]
     return [kpis, html.Div(className="grid", children=[dcc.Graph(figure=f) for f in graphs])]
 
+dash_app = app          # keep the Dash object for local runs
+app = server            # hosts (Vercel/gunicorn) look for a WSGI callable named `app`
+
 if __name__ == "__main__":
-    app.run(debug=False, port=int(os.environ.get("PORT", 8050)))
+    dash_app.run(debug=False, port=int(os.environ.get("PORT", 8050)))
