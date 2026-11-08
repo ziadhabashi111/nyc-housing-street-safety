@@ -1,0 +1,13 @@
+,rows_checked,mismatches,mismatch_pct
+zip_code,9427,0,0.0
+borough,9427,0,0.0
+completion_year,9427,0,0.0
+construction_type (case-insensitive),9427,0,0.0
+extremely_low_income_units,9427,0,0.0
+very_low_income_units,9427,0,0.0
+low_income_units,9427,0,0.0
+moderate_income_units,9427,0,0.0
+middle_income_units,9427,0,0.0
+other_income_units,9427,0,0.0
+affordable_units == tiers minus other,9427,0,0.0
+affordable_units == all_counted_units,9427,1332,14.13

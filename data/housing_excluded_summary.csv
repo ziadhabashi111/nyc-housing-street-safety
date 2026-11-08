@@ -1,0 +1,9 @@
+group,buildings,share_of_buildings_pct,total_units,share_of_units_pct
+All buildings in housing_clean,9427,100.0,432375,100.0
+Excluded from ZIP x year: no ZIP,1956,20.7,3512,0.8
+Excluded from ZIP x year: no completion year,1663,17.6,111852,25.9
+Excluded from ZIP x year: no ZIP AND no year,77,0.8,820,0.2
+Excluded from ZIP x year: no ZIP OR no year (total),3542,37.6,114544,26.5
+Kept in borough x year: has year but no ZIP,1879,19.9,2692,0.6
+Usable for ZIP x year (ZIP and year present),5885,62.4,317831,73.5
+...of which completed 2018-2025 (analysis window),4350,46.1,242248,56.0
