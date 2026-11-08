@@ -1,0 +1,6 @@
+data/transport_clean.csv
+data/crashes_enriched.csv
+data/housing_audit.csv
+data/housing_excluded_summary.csv
+Dockerfile
+__pycache__

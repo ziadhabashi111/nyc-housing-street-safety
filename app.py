@@ -23,7 +23,9 @@ borough_year = pd.read_csv(f"{DATA}/merged_borough_year.csv")
 housing = pd.read_csv(f"{DATA}/housing_clean.csv", dtype={"zip_code": str}, **READ,
                       usecols=["borough", "zip_code", "latitude", "longitude", "completion_year",
                                "total_units", "affordable_units"])
-crashes = pd.read_csv(f"{DATA}/crashes_enriched.csv", dtype={"zip_code": str}, **READ,
+# crashes_app.csv.gz = crashes_enriched.csv reduced to the columns used here (smaller, faster to load)
+CRASH_FILE = "crashes_app.csv.gz" if os.path.exists(f"{DATA}/crashes_app.csv.gz") else "crashes_enriched.csv"
+crashes = pd.read_csv(f"{DATA}/{CRASH_FILE}", dtype={"zip_code": str}, **READ,
                       usecols=["crash_year", "crash_hour", "crash_weekday", "borough", "zip_code",
                                "latitude", "longitude", "persons_injured", "persons_killed",
                                "top_contributing_factor", "housing_group"])

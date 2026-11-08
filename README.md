@@ -27,7 +27,8 @@ pip install -r requirements.txt
 python app.py        # http://localhost:8050
 ```
 
-Deploy on Render: build command `pip install -r requirements.txt`, start command `gunicorn app:server`.
+Deploy on Vercel: import the repo as a project (Framework Preset: Other). `vercel.json` + `api/index.py` expose the Dash server; no build command is needed.
+The site loads `data/crashes_app.csv.gz` (a slim copy of `crashes_enriched.csv`) to stay under Vercel's size limit; `.vercelignore` leaves the large CSVs out of the deployment.
 Plotly is pinned to 5.24.1 because `charts_member1.fig_rq2` uses `Densitymapbox` (deprecated in newer releases).
 
 ## Read the CSVs correctly
