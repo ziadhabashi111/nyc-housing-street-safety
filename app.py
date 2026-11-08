@@ -185,7 +185,21 @@ def generate_report(n, mode, boroughs, years, group, zip_code):
     return [kpis, html.Div(className="grid", children=[dcc.Graph(figure=f) for f in graphs])]
 
 dash_app = app          # keep the Dash object for local runs
-app = server            # hosts (Vercel/gunicorn) look for a WSGI callable named `app`
+
+
+def _restore_path(environ, start_response):
+    """Vercel rewrites every URL to /api/index?__path=<original path>; put the original path back
+    so Dash can serve its own routes (/_dash-layout, /_dash-component-suites/..., /assets/...)."""
+    from urllib.parse import parse_qsl, urlencode
+    qs = parse_qsl(environ.get("QUERY_STRING", ""), keep_blank_values=True)
+    orig = [v for k, v in qs if k == "__path"]
+    if orig:
+        environ["PATH_INFO"] = "/" + orig[0].lstrip("/")
+        environ["QUERY_STRING"] = urlencode([(k, v) for k, v in qs if k != "__path"])
+    return server(environ, start_response)
+
+
+app = _restore_path     # hosts (Vercel) look for a WSGI callable named `app` (gunicorn: app:server)
 
 if __name__ == "__main__":
     dash_app.run(debug=False, port=int(os.environ.get("PORT", 8050)))
