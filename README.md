@@ -12,7 +12,7 @@ Data Engineering and Visualization, GIU, Milestone 1.
 | File | What it is |
 |---|---|
 | `Milestone1_Main.ipynb` | Colab notebook: dataset overview, EDA, cleaning of both datasets, integration, post-integration cleaning, research questions, prompts used (all outputs saved) |
-| `app.py`, `charts_member1.py`, `assets/` | Dash site: filters (borough, housing group, housing category, crash factor, crash outcome, years), ZIP search, free-text search, "Generate Report", 10 charts, story section) |
+| `app.py`, `charts_member1.py`, `assets/` | Dash site: filters (borough, housing group, housing category, crash factor, crash outcome, years), ZIP search, free-text search, "Generate Report", 10 charts, story section |
 | `data/housing_clean.csv` | 9,427 buildings, ZIP as a 5-character string |
 | `data/transport_clean.csv` | 199,999 crashes, stratified by year (crash-level charts only) |
 | `data/crashes_enriched.csv` | `transport_clean` + `housing_group` of each crash's ZIP |
