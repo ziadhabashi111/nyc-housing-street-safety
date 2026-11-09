@@ -11,8 +11,8 @@ Data Engineering and Visualization, GIU, Milestone 1.
 
 | File | What it is |
 |---|---|
-| `Milestone1_Main.ipynb` | Colab notebook: download, cleaning, integration, post-integration cleaning (all outputs saved) |
-| `app.py`, `charts_member1.py`, `assets/` | Dash site (dropdowns, ZIP search mode, "Generate Report") |
+| `Milestone1_Main.ipynb` | Colab notebook: dataset overview, EDA, cleaning of both datasets, integration, post-integration cleaning, research questions, prompts used (all outputs saved) |
+| `app.py`, `charts_member1.py`, `assets/` | Dash site: filters (borough, housing group, housing category, crash factor, crash outcome, years), ZIP search, free-text search, "Generate Report", 10 charts, story section) |
 | `data/housing_clean.csv` | 9,427 buildings, ZIP as a 5-character string |
 | `data/transport_clean.csv` | 199,999 crashes, stratified by year (crash-level charts only) |
 | `data/crashes_enriched.csv` | `transport_clean` + `housing_group` of each crash's ZIP |
@@ -56,7 +56,7 @@ In `crashes_enriched.csv`, `housing_group = "No ZIP"` means the crash has no ZIP
 
 - Buildings without a completion year hold 25.9% of all units and are missing from ZIP-level views; buildings without a ZIP hold 0.8%.
 - Missing ZIPs are uneven: Staten Island 71.5%, Queens 41.8%, Bronx 16.9%, Brooklyn 15.5%, Manhattan 5.9%. ZIP-level results for Staten Island and Queens are the least reliable.
-- 124 of the 9,551 raw buildings (13,213 units) are not in `housing_clean.csv`.
+- 124 of the 9,551 raw buildings (13,213 units) are not in housing_clean.csv: their building_id already appeared earlier in the raw table, so only the first row of each id was kept.
 - `affordable_units` excludes `other_income_units`, so it is lower than the raw `all_counted_units` in 1,332 buildings (usually by 1 unit).
 - Nearest-neighbour ZIP recovery can assign the wrong ZIP near boundaries. `crashes_enriched` is a 200k sample; ZIP totals use all crashes.
 - 2026 is excluded (partial year). Only vehicle 1's contributing factor was downloaded.
