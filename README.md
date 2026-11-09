@@ -31,6 +31,7 @@ python app.py        # http://localhost:8050
 
 Deploy on Vercel: import the repo as a project (Hobby plan). `vercel.json` + `api/index.py` expose the Dash server; no build command is needed.
 The site loads `data/crashes_app.csv.gz` (a slim copy of `crashes_enriched.csv`) to stay under Vercel's size limit; `.vercelignore` leaves the large CSVs out of the deployment.
+| `data/crashes_app.csv.gz` | Slim compressed copy of `crashes_enriched.csv` that the deployed site loads |
 Plotly is pinned to 5.24.1 because `charts_member1.fig_rq2` uses `Densitymapbox` (deprecated in newer releases).
 
 ## Read the CSVs correctly
