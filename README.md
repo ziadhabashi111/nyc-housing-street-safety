@@ -84,6 +84,6 @@ In `crashes_enriched.csv`, `housing_group = "No ZIP"` means the crash has no ZIP
 |---|---|
 | Ziad M | Dataset selection and feasibility check, full crash download and ZIP recovery, post-integration cleaning, RQ1 and RQ2 |
 | Ahmed | Housing dataset EDA and pre-integration cleaning (`housing_clean.csv`), RQ3 and RQ4 |
-| Yahia | Crash dataset EDA and pre-integration cleaning (`transport_clean.csv`), RQ5 and RQ6 |
+| Yahia | Crash dataset EDA and pre-integration cleaning (`transport_clean.csv`), RQ5 and RQ6, website UI/UX redesign (color system, layout, 3D styling) |
 | Habashi | Dash app (dropdowns, search mode, Generate Report), Vercel deployment, RQ7 and RQ8 |
 | Abdelrahman | GitHub repo, notebook assembly, story section, README, final testing, RQ9 and RQ10 |

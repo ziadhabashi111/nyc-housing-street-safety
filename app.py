@@ -389,10 +389,11 @@ LIMITS = [
      "crash. The crash factor and outcome filters only affect those three."),
 ]
 
-TEAM = [("Ziad M", "Dataset selection, full crash download and ZIP recovery, post-integration cleaning, RQ1 and RQ2"),
+TEAM = [("Ziad M", "Dataset selection and feasibility check, full crash download and ZIP recovery, "
+                   "post-integration cleaning, RQ1 and RQ2"),
         ("Ahmed", "Housing dataset EDA and pre-integration cleaning, RQ3 and RQ4"),
-        ("Yahia", "Crash dataset EDA and pre-integration cleaning, RQ5 and RQ6"),
-        ("Habashi", "Dash app, Vercel deployment, RQ7 and RQ8"),
+        ("Yahia", "Crash dataset EDA and pre-integration cleaning, RQ5 and RQ6, website UI/UX redesign"),
+        ("Habashi", "Dash app (dropdowns, search mode, Generate Report), Vercel deployment, RQ7 and RQ8"),
         ("Abdelrahman", "GitHub repo, notebook assembly, story section, README, final testing, RQ9 and RQ10")]
 
 TOTAL_CRASHES = int(zip_year["crash_count"].sum())
