@@ -17,9 +17,12 @@ Data Engineering and Visualization, GIU, Milestone 1.
 | `data/housing_clean.csv` | 9,427 buildings, ZIP as a 5-character string |
 | `data/transport_clean.csv` | 199,999 crashes, stratified by year (crash-level charts only) |
 | `data/crashes_enriched.csv` | `transport_clean` + `housing_group` of each crash's ZIP |
+| `data/crashes_app.csv.gz` | Slim compressed copy of `crashes_enriched.csv` that the deployed site loads |
 | `data/merged_zip_year.csv` | 1,683 ZIP-years, 228 ZIPs: exact crash totals + completed housing |
 | `data/merged_borough_year.csv` | 40 borough-years, includes buildings and crashes with no ZIP |
 | `data/housing_excluded_summary.csv`, `data/housing_audit.csv` | What was excluded and the housing verification |
+
+`transport_clean.csv` and `crashes_enriched.csv` are not stored in this repo: running the notebook writes them. The site only needs `crashes_app.csv.gz`.
 
 ## Run locally
 
@@ -32,7 +35,6 @@ python app.py        # http://localhost:8050
 
 Deploy on Vercel: import the repo as a project (Hobby plan). `vercel.json` + `api/index.py` expose the Dash server; no build command is needed.
 The site loads `data/crashes_app.csv.gz` (a slim copy of `crashes_enriched.csv`) to stay under Vercel's size limit; `.vercelignore` leaves the large CSVs out of the deployment.
-| `data/crashes_app.csv.gz` | Slim compressed copy of `crashes_enriched.csv` that the deployed site loads |
 Plotly is pinned to 5.24.1 because `charts_member1.fig_rq2` uses `Densitymapbox` (deprecated in newer releases).
 
 ## Design system
