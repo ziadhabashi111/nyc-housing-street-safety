@@ -3,15 +3,15 @@
 Do the ZIP codes where affordable housing was completed (2018-2025) see more or fewer traffic crashes?
 Data Engineering and Visualization, GIU, Milestone 1.
 
-- Housing: NYC Open Data **hg8x-zxpr** (Affordable Housing Production by Building), 9,551 raw buildings.
-- Crashes: NYC Open Data **h9gi-nx95** (Motor Vehicle Collisions - Crashes), 1,043,903 crashes 2018-2025.
+- Housing: NYC Open Data **hg8x-zxpr** (Affordable Housing Production by Building), 9,551 raw buildings. Link: https://data.cityofnewyork.us/Housing-Development/Affordable-Housing-Production-by-Building/hg8x-zxpr
+- Crashes: NYC Open Data **h9gi-nx95** (Motor Vehicle Collisions - Crashes), 1,043,903 crashes 2018-2025. Link: https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95
 - Integration: ZIP code x year (borough x year as fallback). The datasets share no record-level key, so both are aggregated, never joined row by row.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `Milestone1_Main_updated.ipynb` | Colab notebook: download, cleaning, integration, post-integration cleaning (all outputs saved) |
+| `Milestone1_Main.ipynb` | Colab notebook: download, cleaning, integration, post-integration cleaning (all outputs saved) |
 | `app.py`, `charts_member1.py`, `assets/` | Dash site (dropdowns, ZIP search mode, "Generate Report") |
 | `data/housing_clean.csv` | 9,427 buildings, ZIP as a 5-character string |
 | `data/transport_clean.csv` | 199,999 crashes, stratified by year (crash-level charts only) |
@@ -62,6 +62,12 @@ In `crashes_enriched.csv`, `housing_group = "No ZIP"` means the crash has no ZIP
 - 2026 is excluded (partial year). Only vehicle 1's contributing factor was downloaded.
 - The comparison is correlational: dense, busy areas can have both more housing and more crashes.
 
-## Team
+## Team and contributions
 
-Member 1 (integration, post-integration cleaning, RQ1-RQ2 charts), plus four teammates for housing cleaning, transport cleaning and their charts.
+| Member | Contribution |
+|---|---|
+| Ziad M | Dataset selection and feasibility check, full crash download and ZIP recovery, post-integration cleaning, RQ1 and RQ2 charts (`charts_member1.py`) |
+| Ahmed | Housing dataset EDA and pre-integration cleaning (`housing_clean.csv`), RQ3 and RQ4 |
+| Yahia | Crash dataset EDA and pre-integration cleaning (`transport_clean.csv`), RQ5 and RQ6 |
+| Habashi | Dash app (dropdowns, search mode, Generate Report), Vercel deployment, RQ7 and RQ8 |
+| Abdelrahman | GitHub repo, notebook assembly, story section, README, final testing, RQ9 and RQ10 |
