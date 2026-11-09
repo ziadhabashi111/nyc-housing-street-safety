@@ -3,7 +3,7 @@ body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f7f9
 h1{margin:0 0 4px;font-size:28px}.sub{margin:0 0 16px;color:#556}
 .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:end;
  background:#fff;padding:16px;border-radius:10px;box-shadow:0 1px 3px #0001}
-.controls label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}.wide{grid-column:1/-1}
+.controls>div>label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}.controls input[type=text]{box-sizing:border-box}.controls input[type=radio]{margin:0 4px 0 12px}.wide{grid-column:1/-1}
 button{background:#1f5eff;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:16px;font-weight:600;cursor:pointer}
 button:hover{background:#1747c9}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0}
@@ -13,3 +13,6 @@ button:hover{background:#1747c9}
 .grid>div{background:#fff;border-radius:10px;padding:6px;box-shadow:0 1px 3px #0001}
 .hint{margin:24px 0;color:#556}.notes{margin-top:28px;font-size:14px;color:#445}
 @media(max-width:600px){.grid{grid-template-columns:1fr}}
+.story{margin-top:28px;background:#fff;border-radius:10px;padding:8px 20px 16px;box-shadow:0 1px 3px #0001;font-size:15px;line-height:1.5}
+.story h2{font-size:22px;margin:14px 0 4px}.story h3{font-size:16px;margin:14px 0 4px}
+.understood{margin:14px 0 0;padding:8px 12px;background:#e8f0ff;border-radius:8px;font-size:14px}
