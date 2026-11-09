@@ -12,7 +12,8 @@ Data Engineering and Visualization, GIU, Milestone 1.
 | File | What it is |
 |---|---|
 | `Milestone1_Main.ipynb` | Colab notebook: download, cleaning, integration, post-integration cleaning (all outputs saved) |
-| `app.py`, `charts_member1.py`, `assets/` | Dash site (dropdowns, ZIP search mode, "Generate Report") |
+| `app.py`, `charts_member1.py`, `assets/` | Dash site: filter sidebar, ZIP mode, free-text "Ask" mode, tabbed report |
+| `theme.py`, `assets/style.css` | Design system: color tokens, Plotly chart template, page styles |
 | `data/housing_clean.csv` | 9,427 buildings, ZIP as a 5-character string |
 | `data/transport_clean.csv` | 199,999 crashes, stratified by year (crash-level charts only) |
 | `data/crashes_enriched.csv` | `transport_clean` + `housing_group` of each crash's ZIP |
@@ -32,6 +33,18 @@ python app.py        # http://localhost:8050
 Deploy on Vercel: import the repo as a project (Hobby plan). `vercel.json` + `api/index.py` expose the Dash server; no build command is needed.
 The site loads `data/crashes_app.csv.gz` (a slim copy of `crashes_enriched.csv`) to stay under Vercel's size limit; `.vercelignore` leaves the large CSVs out of the deployment.
 Plotly is pinned to 5.24.1 because `charts_member1.fig_rq2` uses `Densitymapbox` (deprecated in newer releases).
+
+## Design system
+
+| Role | Color | Used for |
+|---|---|---|
+| Primary | civic blue `#1B47B8` | links, selected filters, active tab, chart identity |
+| Secondary | black `#0A0D12` + white `#FFFFFF` | top bar and footer (black), cards and surfaces (white) |
+| Action | taxi yellow `#FFC20E` | the main call to action only ("Update report", "Explore the data") |
+
+Type is Public Sans (Google Fonts). Chart colors live in `theme.py` and were checked for colorblind safety;
+boroughs keep the same color in every chart. Colors are defined once as CSS variables in `assets/style.css`
+(`:root`) and mirrored in `theme.py` for the charts, so change both together.
 
 ## Read the CSVs correctly
 

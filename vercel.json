@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/index.py": {
-      "includeFiles": "{app.py,charts_member1.py,assets/**,data/**}",
+      "includeFiles": "{app.py,charts_member1.py,theme.py,assets/**,data/**}",
       "maxDuration": 60
     }
   },

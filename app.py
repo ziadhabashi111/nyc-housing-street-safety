@@ -1,6 +1,7 @@
 """Milestone 1 dashboard: affordable housing vs. street safety in NYC (ZIP x year).
 
 Run locally:  python app.py          Deploy: gunicorn app:server (or Vercel)
+Design tokens (colors, fonts, chart template) live in theme.py and assets/style.css.
 """
 import os
 import re
@@ -9,8 +10,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, ALL, ctx, no_update, clientside_callback
 
+import theme  # registers the shared Plotly template (must load before any figure is built)
+from theme import (PRIMARY, INK, INK_2, MUTED, SERIES, BOROUGH_COLORS, GROUP_COLORS, ROAD_USER_COLORS,
+                   INCOME_COLORS, TYPE_COLORS, SEQ_BLUE)
 import charts_member1
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -153,80 +157,111 @@ def parse_query(text):
     return f, seen
 
 # ---------------------------------------------------------------- figures
-def kpi(label, value, note=""):
-    return html.Div(className="kpi", children=[html.Div(label, className="kpi-label"),
-                                               html.Div(value, className="kpi-value"),
-                                               html.Div(note, className="kpi-note")])
-
 def empty(msg):
     return charts_member1._empty_figure(msg)
 
-def titled(fig, text):
-    """Short chart title in a smaller font so it never gets cut off."""
-    fig.update_layout(title=dict(text=text, font=dict(size=15), x=0.01, xanchor="left"))
-    return fig
+def title_boroughs(df, col="borough"):
+    return df.assign(**{col: df[col].str.title()})
 
 def fig_group_trend(z):
+    """RQ3: crashes per ZIP by housing group, over time (direct-labelled lines)."""
     if z.empty:
         return empty("No ZIP-years for these filters")
     t = (z.groupby(["year", "housing_group"]).agg(crashes=("crash_count", "sum"), zips=("zip_code", "nunique"))
            .reset_index())
     t["crashes_per_zip"] = t["crashes"] / t["zips"]
     fig = px.line(t, x="year", y="crashes_per_zip", color="housing_group", markers=True,
-                  template="plotly_white", category_orders={"housing_group": GROUPS},
-                  labels={"crashes_per_zip": "Crashes per ZIP", "year": "Year", "housing_group": "Housing group"})
-    fig.update_xaxes(dtick=1, tickformat="d")
-    return titled(fig, "RQ3: Crashes per ZIP by housing group")
+                  color_discrete_map=GROUP_COLORS, category_orders={"housing_group": GROUPS},
+                  labels={"crashes_per_zip": "Crashes per ZIP code", "year": "", "housing_group": "Housing group"})
+    fig.update_traces(line=dict(width=2.2), marker=dict(size=8, line=dict(color="white", width=1.5)),
+                      hovertemplate="%{x}: %{y:,.0f} crashes per ZIP<extra>%{fullData.name}</extra>")
+    last = t[t["year"] == t["year"].max()].sort_values("crashes_per_zip")
+    gap = max(t["crashes_per_zip"].max() * 0.07, 1)               # keep end labels from overlapping
+    prev = None
+    for _, r in last.iterrows():                                  # label each line at its end
+        y = r["crashes_per_zip"] if prev is None else max(r["crashes_per_zip"], prev + gap)
+        prev = y
+        fig.add_annotation(x=r["year"], y=y, text=r["housing_group"], showarrow=False,
+                           xanchor="left", xshift=10, font=dict(size=11.5, color=INK_2))
+    y0, y1 = int(t["year"].min()), int(t["year"].max())
+    fig.update_xaxes(dtick=1, tickformat="d", range=[y0 - 0.3, y1 + 0.3])
+    fig.update_yaxes(tickformat=",", rangemode="tozero")
+    fig.update_layout(margin=dict(r=64), showlegend=True)
+    return fig
 
 def fig_borough(b):
+    """RQ4: crashes per 100 completed units, by borough."""
     if b.empty:
         return empty("No data for these filters")
     t = b.groupby("borough").agg(crashes=("crash_count", "sum"), units=("total_units", "sum")).reset_index()
     t["crashes_per_100_units"] = (t["crashes"] / t["units"] * 100).where(t["units"] > 0)
-    fig = px.bar(t, x="borough", y="crashes_per_100_units", template="plotly_white",
-                 hover_data=["crashes", "units"],
-                 labels={"crashes_per_100_units": "Crashes per 100 units completed", "borough": ""})
-    return titled(fig, "RQ4: Crashes per 100 housing units, by borough")
+    t = title_boroughs(t)
+    fig = px.bar(t, x="borough", y="crashes_per_100_units", color="borough", color_discrete_map=BOROUGH_COLORS,
+                 category_orders={"borough": list(BOROUGH_COLORS)}, custom_data=["crashes", "units"],
+                 labels={"crashes_per_100_units": "Crashes per 100 units", "borough": ""})
+    fig.update_traces(texttemplate="%{y:,.0f}", textposition="outside", cliponaxis=False,
+                      textfont=dict(color=INK_2, size=12),
+                      hovertemplate="<b>%{x}</b><br>%{y:,.0f} crashes per 100 units<br>"
+                                    "%{customdata[0]:,} crashes, %{customdata[1]:,} units<extra></extra>")
+    fig.update_layout(showlegend=False)
+    fig.update_yaxes(tickformat=",")
+    return fig
+
+HOUR_TICKS = dict(tickvals=[0, 3, 6, 9, 12, 15, 18, 21],
+                  ticktext=["12 am", "3 am", "6 am", "9 am", "12 pm", "3 pm", "6 pm", "9 pm"])
 
 def fig_hour_weekday(c):
+    """RQ5: crashes by hour x weekday (sample)."""
     if c.empty:
         return empty("No crashes for these filters")
     grid = (c.dropna(subset=["crash_hour"]).groupby(["crash_weekday", "crash_hour"]).size()
               .unstack(fill_value=0).reindex(WEEKDAYS).fillna(0))
-    fig = px.imshow(grid, aspect="auto", color_continuous_scale="YlOrRd", template="plotly_white",
-                    labels=dict(x="Hour of day", y="", color="Crashes"))
-    return titled(fig, "RQ5: When crashes happen (hour x weekday, sample)")
+    fig = go.Figure(go.Heatmap(z=grid.values, x=grid.columns, y=[d[:3] for d in grid.index],
+                               colorscale=SEQ_BLUE, xgap=2, ygap=2,
+                               colorbar=dict(title=dict(text="Crashes", font=dict(size=11, color=MUTED)),
+                                             thickness=10, outlinewidth=0),
+                               hovertemplate="%{y}, %{x}:00<br>%{z:,} crashes<extra></extra>"))
+    fig.update_xaxes(showline=False, showgrid=False, **HOUR_TICKS)
+    fig.update_yaxes(showgrid=False, autorange="reversed")
+    return fig
 
 def fig_factors(c):
+    """RQ6: top stated contributing factors (sample)."""
     if c.empty:
         return empty("No crashes for these filters")
     top = (c[~c["top_contributing_factor"].isin(["Unspecified", "Does Not Apply"])]["top_contributing_factor"]
              .value_counts().head(10).sort_values())
     if top.empty:
         return empty("No stated contributing factor for these filters")
-    fig = px.bar(x=top.values, y=top.index, orientation="h", template="plotly_white",
-                 labels={"x": "Crashes (sample)", "y": ""})
-    fig.update_layout(showlegend=False)
-    return titled(fig, "RQ6: Top contributing factors (sample)")
+    fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation="h", marker_color=SERIES[0],
+                           hovertemplate="%{y}<br>%{x:,} crashes<extra></extra>"))
+    fig.update_xaxes(title_text="Crashes in sample", tickformat=",")
+    fig.update_yaxes(showgrid=False)
+    fig.update_layout(bargap=0.38)
+    return fig
 
 def fig_units_vs_crashes(z):
-    """RQ7: yearly completed units (new vs preservation bars) against yearly crashes (line)."""
+    """RQ7: yearly completed units (stacked by type) above yearly crashes. Two panels, one shared x-axis."""
     if z.empty:
         return empty("No ZIP-years for these filters")
     t = z.groupby("year")[["new_construction_units", "preservation_units", "crash_count"]].sum().reset_index()
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_bar(x=t["year"], y=t["new_construction_units"], name="New construction units")
-    fig.add_bar(x=t["year"], y=t["preservation_units"], name="Preservation units")
-    fig.add_scatter(x=t["year"], y=t["crash_count"], name="Crashes", mode="lines+markers",
-                    line=dict(color="black"), secondary_y=True)
-    fig.update_layout(barmode="stack", template="plotly_white", legend=dict(orientation="h", y=-0.2))
-    fig.update_yaxes(title_text="Housing units completed", secondary_y=False)
-    fig.update_yaxes(title_text="Crashes", tickformat=",", rangemode="tozero", secondary_y=True)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.58, 0.42], vertical_spacing=0.14,
+                        subplot_titles=("Housing units completed", "Crashes recorded"))
+    for col, name in [("new_construction_units", "New construction"), ("preservation_units", "Preservation")]:
+        fig.add_bar(x=t["year"], y=t[col], name=name, marker_color=TYPE_COLORS[name], row=1, col=1,
+                    hovertemplate="%{x}: %{y:,} units<extra>" + name + "</extra>")
+    fig.add_scatter(x=t["year"], y=t["crash_count"], name="Crashes", mode="lines+markers", showlegend=False,
+                    line=dict(color=INK, width=2.2), marker=dict(size=8, color=INK, line=dict(color="white", width=1.5)),
+                    hovertemplate="%{x}: %{y:,} crashes<extra></extra>", row=2, col=1)
+    fig.update_layout(barmode="stack", legend=dict(y=1.1, traceorder="normal"))
+    fig.update_yaxes(tickformat=",", rangemode="tozero")
     fig.update_xaxes(dtick=1, tickformat="d")
-    return titled(fig, "RQ7: Housing completed vs. crashes, by year")
+    for a in fig.layout.annotations:                      # subplot titles: small, left-aligned
+        a.update(x=0, xanchor="left", font=dict(size=12, color=MUTED))
+    return fig
 
 def fig_road_users(z):
-    """RQ8: who gets hurt? share of injured pedestrians / cyclists / motorists by housing group."""
+    """RQ8: share of injured pedestrians / cyclists / motorists by housing group."""
     if z.empty:
         return empty("No ZIP-years for these filters")
     t = z.groupby("housing_group")[["ped_injured", "cyc_injured", "motorist_injured"]].sum()
@@ -234,9 +269,12 @@ def fig_road_users(z):
     t = t.melt(id_vars="housing_group", var_name="road_user", value_name="share")
     t["road_user"] = t["road_user"].map({"ped_injured": "Pedestrians", "cyc_injured": "Cyclists",
                                          "motorist_injured": "Motorists"})
-    fig = px.bar(t, x="housing_group", y="share", color="road_user", template="plotly_white",
+    fig = px.bar(t, x="housing_group", y="share", color="road_user", color_discrete_map=ROAD_USER_COLORS,
+                 category_orders={"road_user": list(ROAD_USER_COLORS)},
                  labels={"share": "% of injured people", "housing_group": "Housing group", "road_user": ""})
-    return titled(fig, "RQ8: Who is injured, by housing group")
+    fig.update_traces(hovertemplate="%{x} housing group<br>%{y:.1f}% of injured<extra>%{fullData.name}</extra>")
+    fig.update_yaxes(ticksuffix="%", range=[0, 100])
+    return fig
 
 def fig_top_zips(z):
     """RQ9: ZIP codes with the most crashes per 100 housing units completed."""
@@ -247,13 +285,18 @@ def fig_top_zips(z):
     if t.empty:
         return empty("No ZIP codes with at least 100 completed units for these filters")
     t["crashes_per_100_units"] = t["crashes"] / t["units"] * 100
-    t = t.nlargest(12, "crashes_per_100_units").sort_values("crashes_per_100_units")
+    t = title_boroughs(t.nlargest(12, "crashes_per_100_units").sort_values("crashes_per_100_units"))
     fig = px.bar(t, x="crashes_per_100_units", y="zip_code", color="borough", orientation="h",
-                 template="plotly_white", hover_data=["crashes", "units"],
-                 labels={"crashes_per_100_units": "Crashes per 100 units completed", "zip_code": "ZIP code",
+                 color_discrete_map=BOROUGH_COLORS, category_orders={"borough": list(BOROUGH_COLORS)},
+                 custom_data=["crashes", "units"],
+                 labels={"crashes_per_100_units": "Crashes per 100 units completed", "zip_code": "",
                          "borough": ""})
-    fig.update_yaxes(type="category")
-    return titled(fig, "RQ9: ZIP codes with most crashes per 100 units (>=100 units)")
+    fig.update_traces(hovertemplate="<b>ZIP %{y}</b><br>%{x:,.0f} crashes per 100 units<br>"
+                                    "%{customdata[0]:,} crashes, %{customdata[1]:,} units<extra>%{fullData.name}</extra>")
+    fig.update_yaxes(type="category", categoryorder="array", categoryarray=t["zip_code"].tolist(), showgrid=False)
+    fig.update_xaxes(tickformat=",")
+    fig.update_layout(bargap=0.3)
+    return fig
 
 def fig_income(z):
     """RQ10: which income levels the completed affordable units serve, by borough."""
@@ -264,80 +307,268 @@ def fig_income(z):
         return empty("No ZIP-years for these filters")
     t = z.groupby("borough")[list(cols)].sum().rename(columns=cols).reset_index().melt(
         id_vars="borough", var_name="income_tier", value_name="units")
-    fig = px.bar(t, x="borough", y="units", color="income_tier", template="plotly_white",
-                 labels={"units": "Affordable units completed", "borough": "", "income_tier": "Income tier"})
-    return titled(fig, "RQ10: Income tiers served by completed units")
+    t = title_boroughs(t)
+    fig = px.bar(t, x="borough", y="units", color="income_tier", color_discrete_map=INCOME_COLORS,
+                 category_orders={"income_tier": list(INCOME_COLORS), "borough": list(BOROUGH_COLORS)},
+                 labels={"units": "Affordable units completed", "borough": "", "income_tier": ""})
+    fig.update_traces(hovertemplate="%{x}<br>%{y:,} units<extra>%{fullData.name} income</extra>")
+    fig.update_yaxes(tickformat=",")
+    fig.update_layout(bargap=0.45)
+    return fig
 
-# ---------------------------------------------------------------- layout
-STORY = [
-    html.H2("The story"),
-    html.H3("Question"),
-    html.P("Do the ZIP codes where affordable housing was completed between 2018 and 2025 also record more traffic "
-           "crashes? The answer shows where street-safety work should go alongside new housing."),
-    html.H3("What we found"),
-    html.Ul([
-        html.Li("ZIP codes in the High housing group average more crashes per year than Medium and Low ones (RQ3). "
-                "ZIP-years with more affordable units also tend to have somewhat more crashes (RQ1), but the pattern is weak."),
-        html.Li("Staten Island and Queens have the most crashes per 100 completed units and the Bronx the fewest (RQ4)."),
-        html.Li("Recorded crashes dropped after 2019 (RQ7). They peak between 2 pm and 6 pm, Friday is the busiest day, "
-                "and driver distraction is the most common stated factor (RQ5, RQ6)."),
-    ]),
-    html.H3("Limits"),
-    html.Ul([
-        html.Li("Housing and crashes are matched by ZIP code and year, not building to crash. These are associations, "
-                "not causes: dense, busy areas can have both more housing and more crashes."),
-        html.Li("Housing group splits ZIP codes into thirds (High, Medium, Low) by units completed 2018-2025; "
-                "None means no completed housing."),
-        html.Li("37.6% of buildings have no ZIP or completion year and 7.4% of crashes have no ZIP; Staten Island and "
-                "Queens are the least reliable."),
-        html.Li("RQ2, RQ5 and RQ6 use a 200k-crash sample; all other charts use every crash. The crash factor and "
-                "outcome filters only affect those three."),
-    ]),
-    html.H3("How this helps NYC"),
-    html.P("Agencies can use RQ9 to prioritise street-safety work near new housing and RQ5 to time enforcement."),
+# ---------------------------------------------------------------- page building blocks
+GRAPH_CONFIG = {"displaylogo": False, "responsive": True,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d", "toggleSpikelines"],
+                "toImageButtonOptions": {"format": "png", "scale": 2}}
+
+def chart_card(rq, title, caption, fig, wide=False, height=360):
+    return html.Section(className="chart-card" + (" wide" if wide else ""), children=[
+        html.Div(className="chart-head", children=[
+            html.H3(title, className="chart-title"),
+            html.Span(rq, className="rq-tag", title="Research question"),
+        ]),
+        html.P(caption, className="chart-caption"),
+        dcc.Graph(figure=fig, config=GRAPH_CONFIG, className="chart", style={"height": f"{height}px"}),
+    ])
+
+def kpi(label, value):
+    return html.Div(className="kpi", children=[html.Div(value, className="kpi-value"),
+                                               html.Div(label, className="kpi-label")])
+
+def notice(text, kind="info"):
+    return html.Div(text, className=f"notice notice-{kind}", role="status")
+
+def field(label, control, box_id, hint=None):
+    return html.Div(id=box_id, className="field", children=[
+        html.Div(label, className="field-label"), control,
+        html.P(hint, className="field-hint") if hint else None])
+
+def pills(id_, options, value, multi=False):
+    comp = dcc.Checklist if multi else dcc.RadioItems
+    return comp(id=id_, options=options, value=value, className="pills",
+                labelClassName="pill", inputClassName="pill-input")
+
+TABS = [{"label": "Housing & crashes", "value": "housing"},
+        {"label": "Map", "value": "map"},
+        {"label": "When & why", "value": "when"},
+        {"label": "People & places", "value": "people"}]
+
+EXAMPLES = ["Brooklyn 2022 new buildings", "fatal crashes in Queens since 2021",
+            "high housing speed", "11234", "Bronx preservation 2019 to 2023"]
+
+def default_filters():
+    return dict(boroughs=BOROUGHS, years=list(YEARS), group="All", zip=None, category="All",
+                factor="All", outcome="Any crash")
+
+DEFAULT_APPLIED = dict(mode="explore", f=default_filters(), query="", seen=[], error=None)
+
+FINDINGS = [
+    ("RQ1, RQ3", "More housing, slightly more crashes",
+     "ZIP codes in the High housing group average more crashes per year than Medium and Low ones. ZIP-years "
+     "with more affordable units also tend to have somewhat more crashes, but the pattern is weak.", "housing"),
+    ("RQ4", "Staten Island and Queens stand out",
+     "They record the most crashes per 100 completed housing units. The Bronx records the fewest.", "housing"),
+    ("RQ5, RQ6, RQ7", "Crashes fell after 2019 and peak in the afternoon",
+     "Recorded crashes dropped after 2019. They peak between 2 pm and 6 pm, Friday is the busiest day, and "
+     "driver distraction is the most common stated factor.", "when"),
 ]
 
-app = Dash(__name__, title="NYC Housing & Street Safety")
+LIMITS = [
+    ("Association, not cause",
+     "Housing and crashes are matched by ZIP code and year, not building to crash. Dense, busy areas can have "
+     "both more housing and more crashes."),
+    ("What the housing groups mean",
+     "ZIP codes are split into thirds (High, Medium, Low) by units completed 2018 to 2025. None means no "
+     "completed housing in that period."),
+    ("Missing locations",
+     "37.6% of buildings have no ZIP or completion year and 7.4% of crashes have no ZIP. Staten Island and "
+     "Queens are the least reliable at ZIP level."),
+    ("Sampled charts",
+     "The map, the timing heatmap and the factors chart use a 200k-crash sample. All other charts use every "
+     "crash. The crash factor and outcome filters only affect those three."),
+]
+
+TEAM = [("Ziad M", "Dataset selection, full crash download and ZIP recovery, post-integration cleaning, RQ1 and RQ2"),
+        ("Ahmed", "Housing dataset EDA and pre-integration cleaning, RQ3 and RQ4"),
+        ("Yahia", "Crash dataset EDA and pre-integration cleaning, RQ5 and RQ6"),
+        ("Habashi", "Dash app, Vercel deployment, RQ7 and RQ8"),
+        ("Abdelrahman", "GitHub repo, notebook assembly, story section, README, final testing, RQ9 and RQ10")]
+
+TOTAL_CRASHES = int(zip_year["crash_count"].sum())
+TOTAL_UNITS = int(zip_year["total_units"].sum())
+
+# ---------------------------------------------------------------- layout
+app = Dash(__name__, title="NYC Housing & Street Safety",
+           external_stylesheets=["https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap"],
+           meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                      {"name": "description", "content": "Affordable housing completed vs. traffic crashes in NYC, "
+                                                         "by ZIP code, 2018-2025."}])
 server = app.server
 
-app.layout = html.Div(className="page", children=[
-    html.H1("Affordable housing and street safety in NYC"),
-    html.P("Affordable housing completed vs. traffic crashes, by ZIP code, 2018-2025.", className="sub"),
-    html.Div(className="controls", children=[
-        html.Div([html.Label("Mode"),
-                  dcc.RadioItems(id="mode", value="explore", inline=True,
-                                 options=[{"label": "Explore", "value": "explore"},
-                                          {"label": "Search a ZIP code", "value": "search"},
-                                          {"label": "Free-text search", "value": "text"}])], className="wide"),
-        html.Div([html.Label("Search"),
-                  dcc.Input(id="query", type="text", debounce=False, style={"width": "100%", "padding": "9px"},
-                            placeholder="e.g. Brooklyn 2022 new buildings")],
-                 id="box-query", className="wide", style={"display": "none"}),
-        html.Div([html.Label("Borough"),
-                  dcc.Dropdown(id="boroughs", options=BOROUGHS, value=BOROUGHS, multi=True)], id="box-boroughs"),
-        html.Div([html.Label("Housing group (ZIP level)"),
-                  dcc.Dropdown(id="group", clearable=False, value="All", options=["All"] + GROUPS)], id="box-group"),
-        html.Div([html.Label("ZIP code"),
-                  dcc.Dropdown(id="zip", options=ZIPS, value=None, placeholder="Type a ZIP code...")],
-                 id="box-zip", style={"display": "none"}),
-        html.Div([html.Label("Housing category"),
-                  dcc.Dropdown(id="category", clearable=False, value="All", options=["All"] + CATEGORIES)],
-                 id="box-category"),
-        html.Div([html.Label("Crash factor (transport category)"),
-                  dcc.Dropdown(id="factor", clearable=False, value="All", options=["All"] + FACTORS)],
-                 id="box-factor"),
-        html.Div([html.Label("Crash outcome"),
-                  dcc.Dropdown(id="outcome", clearable=False, value="Any crash", options=OUTCOMES)],
-                 id="box-outcome"),
-        html.Div([html.Label("Years"),
-                  dcc.RangeSlider(id="years", min=YEARS[0], max=YEARS[1], step=1, value=list(YEARS),
-                                  marks={y: str(y) for y in range(YEARS[0], YEARS[1] + 1)})],
-                 id="box-years", className="wide"),
-        html.Button("Generate Report", id="go", n_clicks=0),
+topbar = html.Header(className="topbar", children=[
+    html.Div(className="topbar-inner", children=[
+        html.A(href="#top", className="brand", children=[
+            html.Img(src=app.get_asset_url("logo.svg"), alt="", className="brand-mark"),
+            html.Span("NYC Housing & Street Safety", className="brand-name"),
+        ]),
+        html.Nav(className="nav", children=[html.A("Explore", href="#explore"), html.A("Findings", href="#findings"),
+                                            html.A("About the data", href="#about")]),
     ]),
-    dcc.Loading(html.Div(id="report"), type="circle"),
-    html.Div(className="story", children=STORY),
 ])
+
+hero = html.Section(id="top", className="hero", children=[
+    html.Div(className="hero-floor", **{"aria-hidden": "true"}),
+    html.Div(className="hero-inner", children=[
+        html.Div(className="hero-copy", children=[
+            html.H1("Where New York built affordable housing, were the streets less safe?"),
+            html.P(f"We matched {TOTAL_UNITS:,} affordable housing units completed between 2018 and 2025 with "
+                   f"{TOTAL_CRASHES:,} police-reported crashes, ZIP code by ZIP code. Filter the data, search a "
+                   "neighborhood, or jump to what we found.", className="lead"),
+            html.Div(className="hero-actions", children=[
+                html.A("Explore the data", href="#explore", className="btn btn-action"),
+                html.A("Read the findings", href="#findings", className="btn btn-ghost"),
+            ]),
+        ]),
+        html.Aside(className="answer", **{"data-tilt": ""}, children=[
+            html.H2("The short answer"),
+            html.P("ZIP codes that got more affordable housing see somewhat more crashes, but the link is weak and "
+                   "reflects busy, dense areas rather than the housing itself."),
+            html.Dl(className="facts", children=[
+                html.Div([html.Dt("Crashes with a ZIP"), html.Dd(f"{TOTAL_CRASHES:,}")]),
+                html.Div([html.Dt("Units completed"), html.Dd(f"{TOTAL_UNITS:,}")]),
+                html.Div([html.Dt("ZIP codes"), html.Dd(f"{len(ZIPS)}")]),
+                html.Div([html.Dt("Years covered"), html.Dd(f"{YEARS[0]} to {YEARS[1]}")]),
+            ]),
+        ]),
+    ]),
+])
+
+sidebar = html.Aside(className="sidebar", **{"aria-label": "Report filters"}, children=[
+    html.Div(className="sidebar-body", children=[
+        html.H2("Build your report", className="sidebar-title"),
+        dcc.RadioItems(id="mode", value="explore", className="segmented", labelClassName="seg",
+                       inputClassName="pill-input",
+                       options=[{"label": "Filters", "value": "explore"},
+                                {"label": "One ZIP", "value": "search"},
+                                {"label": "Ask", "value": "text"}]),
+        html.Div(id="box-query", className="field", style={"display": "none"}, children=[
+            html.Div("Describe what you want to see", className="field-label"),
+            dcc.Input(id="query", type="text", debounce=False, className="text-input", n_submit=0,
+                      placeholder="e.g. Brooklyn 2022 new buildings"),
+            html.P("Mention a borough, year or range, ZIP code, 'new buildings' or 'preservation', "
+                   "'high housing', a crash factor like 'speed', or 'fatal'. Press Enter to run.",
+                   className="field-hint"),
+            html.Div("Try one", className="field-label examples-label"),
+            html.Div(className="examples", children=[
+                html.Button(e, id={"type": "example", "index": i}, className="example-chip", n_clicks=0)
+                for i, e in enumerate(EXAMPLES)]),
+        ]),
+        field("ZIP code", dcc.Dropdown(id="zip", options=ZIPS, value=None, placeholder="Type or pick a ZIP code",
+                                       className="dropdown"), "box-zip"),
+        field("Boroughs", pills("boroughs", [{"label": b.title(), "value": b} for b in BOROUGHS], BOROUGHS, multi=True),
+              "box-boroughs"),
+        field("Housing group", pills("group", ["All"] + GROUPS, "All"), "box-group",
+              "ZIP codes ranked by units completed 2018 to 2025."),
+        field("Housing type", pills("category", [{"label": "All", "value": "All"},
+                                                {"label": "New construction", "value": "New Construction"},
+                                                {"label": "Preservation", "value": "Preservation"}], "All"),
+              "box-category"),
+        html.Div(id="box-years", className="field", children=[
+            html.Div(className="field-label field-label-row", children=[
+                html.Span("Years"), html.Span(id="years-label", className="years-label")]),
+            dcc.RangeSlider(id="years", min=YEARS[0], max=YEARS[1], step=1, value=list(YEARS), allowCross=False,
+                            marks={y: f"'{str(y)[2:]}" for y in range(YEARS[0], YEARS[1] + 1)},
+                            className="range"),
+        ]),
+        html.Div(className="sub-group", children=[
+            html.P("Crash filters apply to the map and the When & why charts.", className="sub-group-note"),
+            field("Crash outcome", pills("outcome", [{"label": "Any", "value": "Any crash"},
+                                                     {"label": "Injury", "value": "Injury crashes"},
+                                                     {"label": "Fatal", "value": "Fatal crashes"}], "Any crash"),
+                  "box-outcome"),
+            field("Contributing factor", dcc.Dropdown(id="factor", clearable=False, value="All",
+                                                      options=["All"] + FACTORS, className="dropdown",
+                                                      searchable=True), "box-factor"),
+        ]),
+    ]),
+    html.Div(className="sidebar-foot", children=[
+        html.P(id="dirty-note", className="dirty-note", **{"aria-live": "polite"}),
+        html.Div(className="sidebar-buttons", children=[
+            html.Button("Reset", id="reset", n_clicks=0, className="btn btn-ghost btn-sm"),
+            html.Button("Update report", id="go", n_clicks=0, className="btn btn-action btn-grow"),
+        ]),
+    ]),
+])
+
+main = html.Div(className="report", id="report", children=[
+    html.Div(id="summary", className="summary"),
+    dcc.Loading(type="dot", color=PRIMARY, parent_className="loading-wrap", children=[
+        html.Div(id="kpis", className="kpis"),
+        dcc.RadioItems(id="tab", value="housing", options=TABS, className="tabbar", labelClassName="tab",
+                       inputClassName="pill-input"),
+        html.Div(id="section", className="chart-grid"),
+    ]),
+])
+
+findings = html.Section(id="findings", className="band", children=[
+    html.Div(className="band-inner", children=[
+        html.H2("What we found", className="band-title"),
+        html.Div(className="findings", children=[
+            html.Article(className="finding", children=[
+                html.Span(rqs, className="rq-tag"),
+                html.H3(title), html.P(text),
+                html.Button("See the charts", id={"type": "finding", "index": i}, n_clicks=0,
+                            className="link-btn"),
+            ]) for i, (rqs, title, text, _tab) in enumerate(FINDINGS)]),
+        html.H2("Read these results with care", className="band-title band-title-sm"),
+        html.Div(className="limits", children=[
+            html.Details(className="limit", children=[html.Summary(t), html.P(d)]) for t, d in LIMITS]),
+        html.P("How this helps NYC: agencies can use the ZIP ranking (RQ9) to prioritize street-safety work near "
+               "new housing and the timing heatmap (RQ5) to schedule enforcement.", className="helps"),
+    ]),
+])
+
+about = html.Section(id="about", className="band band-white", children=[
+    html.Div(className="band-inner about", children=[
+        html.Div(children=[
+            html.H2("About the data", className="band-title"),
+            html.Ul(className="sources", children=[
+                html.Li([html.A("Affordable Housing Production by Building",
+                                href="https://data.cityofnewyork.us/Housing-Development/Affordable-Housing-Production-by-Building/hg8x-zxpr",
+                                target="_blank", rel="noopener"),
+                         html.Span("NYC Open Data, 9,551 buildings")]),
+                html.Li([html.A("Motor Vehicle Collisions: Crashes",
+                                href="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
+                                target="_blank", rel="noopener"),
+                         html.Span("NYC Open Data, 1,043,903 crashes 2018 to 2025")]),
+            ]),
+            html.P("The two datasets share no record-level key, so both are counted per ZIP code and year and then "
+                   "joined. 266,590 crashes without a ZIP got one recovered from their coordinates (nearest ZIP "
+                   "within 200 m). Every one of the 242,248 units and 966,552 crashes with a ZIP is kept.",
+                   className="about-text"),
+        ]),
+        html.Div(children=[
+            html.H2("Team", className="band-title"),
+            html.Table(className="team", children=[html.Tbody([
+                html.Tr([html.Th(n, scope="row"), html.Td(r)]) for n, r in TEAM])]),
+        ]),
+    ]),
+])
+
+app.layout = html.Div(className="app", children=[
+    dcc.Store(id="applied", data=DEFAULT_APPLIED),
+    topbar, hero,
+    html.Section(id="explore", className="workspace", children=[sidebar, main]),
+    findings, about,
+    html.Footer(className="footer", children=[
+        html.Div(className="footer-inner", children=[
+            html.Span("Data Engineering and Visualization, GIU. Milestone 1."),
+            html.Span("Data: NYC Open Data. Charts update from the filters above."),
+        ])]),
+])
+
+# ---------------------------------------------------------------- callbacks
+CONTROLS = ["boroughs", "group", "zip", "category", "factor", "outcome", "years"]
 
 @app.callback(Output("box-boroughs", "style"), Output("box-group", "style"), Output("box-zip", "style"),
               Output("box-query", "style"), Output("box-category", "style"), Output("box-factor", "style"),
@@ -351,51 +582,175 @@ def toggle_mode(mode):
         return hide, hide, show, hide, show, show, show, show
     return show, show, hide, hide, show, show, show, show
 
-@app.callback(Output("report", "children"), Input("go", "n_clicks"),
-              State("mode", "value"), State("boroughs", "value"), State("years", "value"),
-              State("group", "value"), State("zip", "value"), State("category", "value"),
-              State("factor", "value"), State("outcome", "value"), State("query", "value"))
-def generate_report(n, mode, boroughs, years, group, zip_code, category, factor, outcome, query):
-    if not n:
-        return html.P("Choose filters (or type a search) and press Generate Report.", className="hint")
-    understood = None
-    if mode == "text":
-        if not (query or "").strip():
-            return html.P("Type a search first, for example: Brooklyn 2022 new buildings.", className="hint")
-        f, seen = parse_query(query)
-        if not seen:
-            return html.P("Nothing recognised in that search. Try a borough, a year or range, 'new buildings' or "
-                          "'preservation', a ZIP code, 'high housing', or a crash factor like 'speed'.",
-                          className="hint")
-        understood = html.P("Understood as: " + " | ".join(seen), className="understood")
+@app.callback(Output("years-label", "children"), Input("years", "value"))
+def years_label(years):
+    y0, y1 = years
+    return str(y0) if y0 == y1 else f"{y0} to {y1}"
+
+@app.callback([Output(c, "value") for c in CONTROLS] + [Output("query", "value")],
+              Input("reset", "n_clicks"), prevent_initial_call=True)
+def reset_controls(_):
+    d = default_filters()
+    return [d[c] for c in CONTROLS] + [""]
+
+def controls_to_filters(mode, boroughs, group, zip_code, category, factor, outcome, years):
+    return dict(boroughs=boroughs or [], years=[int(y) for y in years], group=group,
+                zip=zip_code if mode == "search" else None, category=category, factor=factor, outcome=outcome)
+
+def applied_from_text(query):
+    q = (query or "").strip()
+    if not q:
+        return dict(mode="text", query=q, error="Type a search first, for example: Brooklyn 2022 new buildings.")
+    f, seen = parse_query(q)
+    if not seen:
+        return dict(mode="text", query=q,
+                    error="Nothing recognized in that search. Try a borough, a year or range, 'new buildings' or "
+                          "'preservation', a ZIP code, 'high housing', or a crash factor like 'speed'.")
+    return dict(mode="text", query=q, f=f, seen=seen, error=None)
+
+@app.callback(Output("applied", "data"), Output("query", "value", allow_duplicate=True),
+              Input("go", "n_clicks"), Input("reset", "n_clicks"), Input("query", "n_submit"),
+              Input({"type": "example", "index": ALL}, "n_clicks"),
+              State("mode", "value"), [State(c, "value") for c in CONTROLS], State("query", "value"),
+              prevent_initial_call=True)
+def apply_filters(_go, _reset, _submit, _examples, mode, boroughs, group, zip_code, category, factor, outcome,
+                  years, query):
+    trig = ctx.triggered_id
+    if trig == "reset":
+        return DEFAULT_APPLIED, no_update
+    if isinstance(trig, dict) and trig.get("type") == "example":
+        if not ctx.triggered[0]["value"]:
+            return no_update, no_update
+        q = EXAMPLES[trig["index"]]
+        return applied_from_text(q), q
+    if mode == "text" or trig == "query":
+        return applied_from_text(query), no_update
+    if mode == "search" and not zip_code:
+        return dict(mode="search", error="Pick a ZIP code first."), no_update
+    f = controls_to_filters(mode, boroughs, group, zip_code, category, factor, outcome, years)
+    return dict(mode=mode, f=f, query="", seen=[], error=None), no_update
+
+@app.callback(Output("go", "className"), Output("dirty-note", "children"),
+              Input("mode", "value"), [Input(c, "value") for c in CONTROLS], Input("query", "value"),
+              Input("applied", "data"))
+def mark_dirty(mode, boroughs, group, zip_code, category, factor, outcome, years, query, applied):
+    base = "btn btn-action btn-grow"
+    applied = applied or {}
+    if applied.get("error"):
+        dirty = True
+    elif mode == "text":
+        dirty = (query or "").strip() != (applied.get("query") or "") or applied.get("mode") != "text"
     else:
-        if mode == "search" and not zip_code:
-            return html.P("Pick a ZIP code first.", className="hint")
-        f = dict(boroughs=boroughs, years=years, group=group, category=category, factor=factor, outcome=outcome,
-                 zip=zip_code if mode == "search" else None)
+        cur = controls_to_filters(mode, boroughs, group, zip_code, category, factor, outcome, years)
+        af = applied.get("f") or {}
+        norm = lambda f: (sorted(f.get("boroughs") or []), list(f.get("years") or []), f.get("group"),
+                          f.get("zip"), f.get("category"), f.get("factor"), f.get("outcome"))
+        dirty = norm(cur) != norm(af) or (applied.get("mode") == "text")
+    if dirty:
+        return base + " is-dirty", "Your changes are not applied yet."
+    return base, ""
+
+def summary_chips(f):
+    chips = []
+    if f.get("zip"):
+        chips.append(f"ZIP {f['zip']}")
+    else:
+        bs = f.get("boroughs") or []
+        chips.append("All boroughs" if not bs or set(bs) == set(BOROUGHS) else ", ".join(b.title() for b in bs))
+    y0, y1 = f["years"]
+    chips.append(str(y0) if y0 == y1 else f"{y0} to {y1}")
+    if f.get("group", "All") != "All" and not f.get("zip"):
+        chips.append(f"{f['group']} housing group")
+    if f.get("category", "All") != "All":
+        chips.append(f["category"])
+    if f.get("factor", "All") != "All":
+        chips.append(f["factor"])
+    if f.get("outcome", "Any crash") != "Any crash":
+        chips.append(f["outcome"])
+    return chips
+
+@app.callback(Output("summary", "children"), Output("kpis", "children"), Output("section", "children"),
+              Input("applied", "data"), Input("tab", "value"))
+def render(applied, tab):
+    applied = applied or DEFAULT_APPLIED
+    if applied.get("error"):
+        return None, None, [notice(applied["error"], "warn")]
+    f = applied["f"]
     z, c, h, b = filter_data(f)
+    lead = "Understood as" if applied.get("mode") == "text" else "Showing"
+    summary = [html.Span(lead, className="summary-lead")] + [html.Span(t, className="chip") for t in summary_chips(f)]
     if z.empty and c.empty:
-        return [understood, html.P("No data for these filters.", className="hint")]
+        return summary, None, [notice("No data matches these filters. Try a wider year range or remove a filter.",
+                                      "warn")]
 
     crashes_total = int(z["crash_count"].sum())
     units = int(z["total_units"].sum())
-    kpis = html.Div(className="kpis", children=[
+    kpis = [
         kpi("ZIP codes", f"{z['zip_code'].nunique():,}"),
-        kpi("Crashes (with ZIP)", f"{crashes_total:,}"),
-        kpi("Persons injured", f"{int(z['persons_injured'].sum()):,}"),
-        kpi("Persons killed", f"{int(z['persons_killed'].sum()):,}"),
+        kpi("Crashes", f"{crashes_total:,}"),
+        kpi("People injured", f"{int(z['persons_injured'].sum()):,}"),
+        kpi("People killed", f"{int(z['persons_killed'].sum()):,}"),
         kpi("Housing units completed", f"{units:,}"),
         kpi("Crashes per 100 units", f"{crashes_total / units * 100:,.0f}" if units else "n/a"),
-    ])
-    rq1 = charts_member1.fig_rq1(z)
-    rq2 = charts_member1.fig_rq2(h.assign(zip_code=h["zip_code"].fillna("?")), c)
-    graphs = [
-        titled(rq1, "RQ1: Affordable units completed vs. crashes (ZIP-year)"),
-        titled(rq2, "RQ2: Housing buildings over crash density"),
-        fig_group_trend(z), fig_borough(b), fig_hour_weekday(c), fig_factors(c),
-        fig_units_vs_crashes(z), fig_road_users(z), fig_top_zips(z), fig_income(z),
     ]
-    return [understood, kpis, html.Div(className="grid", children=[dcc.Graph(figure=g) for g in graphs])]
+
+    if tab == "map":
+        rq2 = charts_member1.fig_rq2(h.assign(zip_code=h["zip_code"].fillna("?")), c)
+        cards = [chart_card("RQ2", "Where housing sits relative to crash hotspots",
+                            "Blue dots are affordable housing buildings; bigger dots have more units. Warmer areas "
+                            "have more crashes. Right-drag to tilt or rotate. Crash layer uses a 200k sample.", rq2, wide=True, height=600)]
+    elif tab == "when":
+        cards = [
+            chart_card("RQ5", "When crashes happen",
+                       "Darker cells have more crashes. Hour of day across, day of week down. 200k-crash sample.",
+                       fig_hour_weekday(c), wide=True, height=340),
+            chart_card("RQ6", "Most common contributing factors",
+                       "Factor reported for the first vehicle, excluding 'unspecified'. 200k-crash sample.",
+                       fig_factors(c), height=400),
+            chart_card("RQ7", "Housing built vs. crashes, year by year",
+                       "Top: units completed by type. Bottom: crashes in the same ZIP codes.",
+                       fig_units_vs_crashes(z), height=400),
+        ]
+    elif tab == "people":
+        cards = [
+            chart_card("RQ8", "Who gets hurt",
+                       "Share of injured people who were pedestrians, cyclists or motorists, by housing group.",
+                       fig_road_users(z)),
+            chart_card("RQ9", "ZIP codes with the most crashes per 100 units",
+                       "Top 12 ZIP codes with at least 100 units completed. Hover for totals.", fig_top_zips(z)),
+            chart_card("RQ10", "Which incomes the new units serve",
+                       "Affordable units completed per borough, by income tier from extremely low to middle.",
+                       fig_income(z), wide=True, height=340),
+        ]
+    else:
+        rq1 = charts_member1.fig_rq1(z)
+        cards = [
+            chart_card("RQ1", "More affordable units, more crashes?",
+                       "Each dot is one ZIP code in one year. The dashed trend line is nearly flat: the link is weak.",
+                       rq1, wide=True, height=420),
+            chart_card("RQ3", "Crashes per ZIP code, by housing group",
+                       "ZIP codes split into thirds by units completed 2018 to 2025. None means no completed housing.",
+                       fig_group_trend(z)),
+            chart_card("RQ4", "Crashes per 100 housing units, by borough",
+                       "Higher means more crashes relative to the housing completed there.", fig_borough(b)),
+        ]
+    return summary, kpis, cards
+
+@app.callback(Output("tab", "value"), Input({"type": "finding", "index": ALL}, "n_clicks"), prevent_initial_call=True)
+def open_finding(clicks):
+    if not any(clicks or []):
+        return no_update
+    return FINDINGS[ctx.triggered_id["index"]][3]
+
+clientside_callback(
+    """function(clicks) {
+        if (clicks && clicks.some(Boolean)) {
+            const el = document.getElementById('explore');
+            if (el) el.scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+        }
+        return window.dash_clientside.no_update;
+    }""",
+    Output("findings", "className"), Input({"type": "finding", "index": ALL}, "n_clicks"), prevent_initial_call=True)
 
 dash_app = app          # keep the Dash object for local runs
 
