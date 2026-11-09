@@ -175,6 +175,7 @@ def fig_group_trend(z):
     fig = px.line(t, x="year", y="crashes_per_zip", color="housing_group", markers=True,
                   template="plotly_white", category_orders={"housing_group": GROUPS},
                   labels={"crashes_per_zip": "Crashes per ZIP", "year": "Year", "housing_group": "Housing group"})
+    fig.update_xaxes(dtick=1, tickformat="d")
     return titled(fig, "RQ3: Crashes per ZIP by housing group")
 
 def fig_borough(b):
@@ -220,7 +221,8 @@ def fig_units_vs_crashes(z):
                     line=dict(color="black"), secondary_y=True)
     fig.update_layout(barmode="stack", template="plotly_white", legend=dict(orientation="h", y=-0.2))
     fig.update_yaxes(title_text="Housing units completed", secondary_y=False)
-    fig.update_yaxes(title_text="Crashes", secondary_y=True)
+    fig.update_yaxes(title_text="Crashes", tickformat=",", rangemode="tozero", secondary_y=True)
+    fig.update_xaxes(dtick=1, tickformat="d")
     return titled(fig, "RQ7: Housing completed vs. crashes, by year")
 
 def fig_road_users(z):
@@ -268,36 +270,31 @@ def fig_income(z):
 
 # ---------------------------------------------------------------- layout
 STORY = [
-    html.H2("The story: does new affordable housing go together with more street danger?"),
-    html.H3("Question and why it matters"),
-    html.P("New York City builds and preserves thousands of affordable homes every year. Planners and residents ask "
-           "whether the neighborhoods that receive them also see more traffic crashes, so that street safety can "
-           "be planned together with housing instead of after it."),
+    html.H2("The story"),
+    html.H3("Question"),
+    html.P("Do the ZIP codes where affordable housing was completed between 2018 and 2025 also record more traffic "
+           "crashes? The answer shows where street-safety work should go alongside new housing."),
     html.H3("What we found"),
     html.Ul([
-        html.Li("ZIP codes with the most completed housing (High group) record more crashes per ZIP and year than "
-                "Medium and Low ZIP codes (RQ3). ZIP-years with more affordable units also tend to have more "
-                "crashes (RQ1), but the link is weak."),
-        html.Li("Crashes per 100 units completed are far higher in Staten Island and Queens than in the Bronx "
-                "(RQ4), because those boroughs completed far fewer units."),
-        html.Li("Recorded crashes fall sharply after 2019 while completed units stay uneven from year to year (RQ7). "
-                "The drop may partly reflect events such as the 2020 lockdowns and partly changes in how crashes "
-                "are reported."),
-        html.Li("Crashes peak between 2 pm and 6 pm and Friday is the busiest day; driver distraction, following "
-                "too closely and failing to yield are the most common stated factors (RQ5, RQ6)."),
+        html.Li("ZIP codes in the High housing group average more crashes per year than Medium and Low ones (RQ3). "
+                "ZIP-years with more affordable units also tend to have somewhat more crashes (RQ1), but the pattern is weak."),
+        html.Li("Staten Island and Queens have the most crashes per 100 completed units and the Bronx the fewest (RQ4)."),
+        html.Li("Recorded crashes dropped after 2019 (RQ7). They peak between 2 pm and 6 pm, Friday is the busiest day, "
+                "and driver distraction is the most common stated factor (RQ5, RQ6)."),
     ]),
     html.H3("Limits"),
     html.Ul([
-        html.Li("Housing and crashes are joined by ZIP code and year, not building by crash, so we show association, "
-                "never cause."),
-        html.Li("Dense, busy ZIP codes can have both more housing and more crashes (a confounder we do not measure)."),
-        html.Li("37.6% of buildings have no ZIP or completion year; 7.4% of crashes still have no ZIP."),
-        html.Li("Crash-level charts use a 200k-crash sample; ZIP totals use all crashes."),
+        html.Li("Housing and crashes are matched by ZIP code and year, not building to crash. These are associations, "
+                "not causes: dense, busy areas can have both more housing and more crashes."),
+        html.Li("Housing group splits ZIP codes into thirds (High, Medium, Low) by units completed 2018-2025; "
+                "None means no completed housing."),
+        html.Li("37.6% of buildings have no ZIP or completion year and 7.4% of crashes have no ZIP; Staten Island and "
+                "Queens are the least reliable."),
+        html.Li("RQ2, RQ5 and RQ6 use a 200k-crash sample; all other charts use every crash. The crash factor and "
+                "outcome filters only affect those three."),
     ]),
     html.H3("How this helps NYC"),
-    html.P("City agencies can use the ZIP codes with the most crashes per housing unit (RQ9) to place street-safety "
-           "work such as signal timing, speed cameras and protected crossings next to new housing, and can check "
-           "the time-of-day pattern (RQ5) when scheduling enforcement."),
+    html.P("Agencies can use RQ9 to prioritise street-safety work near new housing and RQ5 to time enforcement."),
 ]
 
 app = Dash(__name__, title="NYC Housing & Street Safety")
@@ -305,14 +302,13 @@ server = app.server
 
 app.layout = html.Div(className="page", children=[
     html.H1("Affordable housing and street safety in NYC"),
-    html.P("Do the ZIP codes where affordable housing was completed (2018-2025) see more or fewer crashes? "
-           "Pick filters or type a question, then press Generate Report.", className="sub"),
+    html.P("Affordable housing completed vs. traffic crashes, by ZIP code, 2018-2025.", className="sub"),
     html.Div(className="controls", children=[
         html.Div([html.Label("Mode"),
                   dcc.RadioItems(id="mode", value="explore", inline=True,
                                  options=[{"label": "Explore", "value": "explore"},
                                           {"label": "Search a ZIP code", "value": "search"},
-                                          {"label": "Free-text search", "value": "text"}])]),
+                                          {"label": "Free-text search", "value": "text"}])], className="wide"),
         html.Div([html.Label("Search"),
                   dcc.Input(id="query", type="text", debounce=False, style={"width": "100%", "padding": "9px"},
                             placeholder="e.g. Brooklyn 2022 new buildings")],
@@ -341,20 +337,6 @@ app.layout = html.Div(className="page", children=[
     ]),
     dcc.Loading(html.Div(id="report"), type="circle"),
     html.Div(className="story", children=STORY),
-    html.Div(className="notes", children=[
-        html.H3("How to read this"),
-        html.Ul([
-            html.Li("Housing and crashes are compared by ZIP code and year (counts per ZIP), not building by crash."),
-            html.Li("housing_group = tercile (High / Medium / Low) of a ZIP's units completed 2018-2025; "
-                    "None = no completed housing in that window."),
-            html.Li("Housing category keeps ZIP codes and buildings with new construction or preservation units. "
-                    "Crash factor and crash outcome apply to the crash-level charts (RQ2, RQ5, RQ6) only."),
-            html.Li("3,542 of 9,427 buildings (37.6%) have no ZIP or no completion year and are missing from ZIP-level "
-                    "views; Staten Island (71.5% missing ZIP) and Queens (41.8%) are the least reliable."),
-            html.Li("7.4% of crashes still have no ZIP after recovery from coordinates; they only appear in the borough view."),
-            html.Li("Crash-level charts use a 200k-crash sample stratified by year; ZIP totals use all crashes."),
-            html.Li("Correlation only: more housing and more crashes can both come from dense, busy areas."),
-        ])]),
 ])
 
 @app.callback(Output("box-boroughs", "style"), Output("box-group", "style"), Output("box-zip", "style"),
@@ -402,9 +384,8 @@ def generate_report(n, mode, boroughs, years, group, zip_code, category, factor,
         kpi("Crashes (with ZIP)", f"{crashes_total:,}"),
         kpi("Persons injured", f"{int(z['persons_injured'].sum()):,}"),
         kpi("Persons killed", f"{int(z['persons_killed'].sum()):,}"),
-        kpi("Housing units completed", f"{units:,}", "buildings with ZIP + year"),
-        kpi("Crashes per 100 units", f"{crashes_total / units * 100:,.0f}" if units else "n/a",
-            "undefined when no units"),
+        kpi("Housing units completed", f"{units:,}"),
+        kpi("Crashes per 100 units", f"{crashes_total / units * 100:,.0f}" if units else "n/a"),
     ])
     rq1 = charts_member1.fig_rq1(z)
     rq2 = charts_member1.fig_rq2(h.assign(zip_code=h["zip_code"].fillna("?")), c)
