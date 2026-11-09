@@ -132,18 +132,6 @@ a{color:var(--primary)}
   box-shadow:0 0 0 1px var(--border),0 2px 0 var(--border-strong),0 6px 12px -6px rgba(16,32,72,.25)}
 .seg:has(input:focus-visible){outline:3px solid var(--primary);outline-offset:1px}
 
-/* pills: boroughs, groups, types, outcome */
-.pills{display:flex;flex-wrap:wrap;gap:6px}
-.pill{position:relative;display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;
-  border:1.5px solid var(--border-strong);background:var(--surface);font-size:13.5px;font-weight:600;
-  color:var(--ink-2);cursor:pointer;user-select:none;transition:background .15s,border-color .15s,color .15s}
-.pill:hover{border-color:var(--primary);color:var(--primary)}
-.pill{box-shadow:0 2px 0 var(--border-strong)}
-.pill:active{transform:translateY(2px);box-shadow:none}
-.pill:has(input:checked){background:var(--primary);border-color:var(--primary);color:#fff;
-  box-shadow:0 2px 0 var(--primary-edge),0 4px 10px -4px rgba(27,71,184,.5)}
-.pill:has(input:focus-visible){outline:3px solid var(--primary);outline-offset:2px}
-
 /* text input + examples */
 .text-input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border:1.5px solid var(--border-strong);
   border-radius:var(--r);color:var(--ink);background:var(--surface)}
@@ -168,6 +156,16 @@ a{color:var(--primary)}
 .dropdown .Select-option{padding:9px 12px;font-size:14px;color:var(--ink-2)}
 .dropdown .Select-option.is-focused{background:var(--primary-soft);color:var(--ink)}
 .dropdown .Select-option.is-selected{background:var(--primary);color:#fff}
+
+/* multi-select borough chips */
+.dropdown-multi.Select--multi .Select-value{background:var(--primary-soft);border:1px solid rgba(27,71,184,.25);
+  color:var(--primary-ink);border-radius:999px;margin:5px 0 0 6px;font-size:13px;font-weight:600;
+  box-shadow:0 1px 0 rgba(27,71,184,.25)}
+.dropdown-multi.Select--multi .Select-value-icon{border-right:1px solid rgba(27,71,184,.2);padding:2px 6px;border-radius:999px 0 0 999px}
+.dropdown-multi.Select--multi .Select-value-icon:hover{background:rgba(27,71,184,.12);color:var(--primary-ink)}
+.dropdown-multi.Select--multi .Select-value-label{padding:2px 9px 2px 6px;color:var(--primary-ink)!important}
+.dropdown-multi.Select--multi .Select-multi-value-wrapper{padding-bottom:5px}
+.dropdown .Select-arrow-zone,.dropdown .Select-clear-zone{padding-right:10px}
 
 /* year range slider (rc-slider) */
 .range{padding:0 4px}
@@ -221,6 +219,11 @@ a{color:var(--primary)}
 .chart-caption{margin:4px 0 10px;font-size:13.5px;color:var(--muted);max-width:80ch}
 .chart{width:100%}
 
+.empty-state{grid-column:1/-1;background:var(--surface);border:1.5px dashed var(--border-strong);
+  border-radius:var(--r-lg);padding:36px 32px;box-shadow:var(--elev-1)}
+.empty-state h3{font-size:19px;margin-bottom:12px}
+.empty-state ol{margin:0;padding-left:20px;display:grid;gap:6px;color:var(--ink-2)}
+.empty-state strong{color:var(--ink)}
 .notice{grid-column:1/-1;padding:16px 18px;border-radius:var(--r);font-size:14.5px;background:var(--surface);
   border:1px solid var(--border);color:var(--ink-2)}
 .notice-warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--ink)}
@@ -231,6 +234,9 @@ a{color:var(--primary)}
 .band-inner{max-width:1360px;margin:0 auto;padding:56px 24px}
 .band-title{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-bottom:22px}
 .band-title-sm{font-size:20px;margin:48px 0 14px}
+.story-sub{font-size:18px;font-weight:700;margin:36px 0 12px}
+.band-title+.story-sub{margin-top:0}
+.story-question{margin:0;font-size:17px;color:var(--ink);max-width:70ch}
 .findings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .finding{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--primary);
   border-radius:var(--r);padding:20px 22px;box-shadow:var(--elev-1);display:flex;flex-direction:column;align-items:flex-start}
@@ -245,7 +251,7 @@ a{color:var(--primary)}
   border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-3px);transition:transform .2s}
 .limit[open] summary::after{transform:rotate(-135deg) translateY(-1px)}
 .limit p{margin:0 0 16px;font-size:14.5px}
-.helps{margin:28px 0 0;padding:16px 20px;border-radius:var(--r);background:var(--ink);color:#E6E9EE;max-width:none}
+.helps{margin:0;padding:16px 20px;border-radius:var(--r);background:var(--ink);color:#E6E9EE;max-width:none}
 
 /* ---------- about */
 .about{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px}

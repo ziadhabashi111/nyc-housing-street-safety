@@ -343,11 +343,6 @@ def field(label, control, box_id, hint=None):
         html.Div(label, className="field-label"), control,
         html.P(hint, className="field-hint") if hint else None])
 
-def pills(id_, options, value, multi=False):
-    comp = dcc.Checklist if multi else dcc.RadioItems
-    return comp(id=id_, options=options, value=value, className="pills",
-                labelClassName="pill", inputClassName="pill-input")
-
 TABS = [{"label": "Housing & crashes", "value": "housing"},
         {"label": "Map", "value": "map"},
         {"label": "When & why", "value": "when"},
@@ -360,7 +355,13 @@ def default_filters():
     return dict(boroughs=BOROUGHS, years=list(YEARS), group="All", zip=None, category="All",
                 factor="All", outcome="Any crash")
 
-DEFAULT_APPLIED = dict(mode="explore", f=default_filters(), query="", seen=[], error=None)
+def empty_state():
+    return html.Div(className="empty-state", children=[
+        html.H3("Your report will appear here"),
+        html.Ol([html.Li("Pick a mode: Explore, ZIP search, or Free text."),
+                 html.Li("Choose filters, or leave them as they are to see all of NYC."),
+                 html.Li(["Press ", html.Strong("Generate Report"), "."])]),
+    ])
 
 FINDINGS = [
     ("RQ1, RQ3", "More housing, slightly more crashes",
@@ -411,7 +412,7 @@ topbar = html.Header(className="topbar", children=[
             html.Img(src=app.get_asset_url("logo.svg"), alt="", className="brand-mark"),
             html.Span("NYC Housing & Street Safety", className="brand-name"),
         ]),
-        html.Nav(className="nav", children=[html.A("Explore", href="#explore"), html.A("Findings", href="#findings"),
+        html.Nav(className="nav", children=[html.A("Explore", href="#explore"), html.A("The story", href="#findings"),
                                             html.A("About the data", href="#about")]),
     ]),
 ])
@@ -423,10 +424,10 @@ hero = html.Section(id="top", className="hero", children=[
             html.H1("Where New York built affordable housing, were the streets less safe?"),
             html.P(f"We matched {TOTAL_UNITS:,} affordable housing units completed between 2018 and 2025 with "
                    f"{TOTAL_CRASHES:,} police-reported crashes, ZIP code by ZIP code. Filter the data, search a "
-                   "neighborhood, or jump to what we found.", className="lead"),
+                   "neighborhood, then press Generate Report.", className="lead"),
             html.Div(className="hero-actions", children=[
                 html.A("Explore the data", href="#explore", className="btn btn-action"),
-                html.A("Read the findings", href="#findings", className="btn btn-ghost"),
+                html.A("Read the story", href="#findings", className="btn btn-ghost"),
             ]),
         ]),
         html.Aside(className="answer", **{"data-tilt": ""}, children=[
@@ -446,32 +447,34 @@ hero = html.Section(id="top", className="hero", children=[
 sidebar = html.Aside(className="sidebar", **{"aria-label": "Report filters"}, children=[
     html.Div(className="sidebar-body", children=[
         html.H2("Build your report", className="sidebar-title"),
+        html.Div("Mode", className="field-label"),
         dcc.RadioItems(id="mode", value="explore", className="segmented", labelClassName="seg",
                        inputClassName="pill-input",
-                       options=[{"label": "Filters", "value": "explore"},
-                                {"label": "One ZIP", "value": "search"},
-                                {"label": "Ask", "value": "text"}]),
+                       options=[{"label": "Explore", "value": "explore"},
+                                {"label": "ZIP search", "value": "search"},
+                                {"label": "Free text", "value": "text"}]),
         html.Div(id="box-query", className="field", style={"display": "none"}, children=[
-            html.Div("Describe what you want to see", className="field-label"),
-            dcc.Input(id="query", type="text", debounce=False, className="text-input", n_submit=0,
+            html.Div("Search", className="field-label"),
+            dcc.Input(id="query", type="text", debounce=False, className="text-input",
                       placeholder="e.g. Brooklyn 2022 new buildings"),
             html.P("Mention a borough, year or range, ZIP code, 'new buildings' or 'preservation', "
-                   "'high housing', a crash factor like 'speed', or 'fatal'. Press Enter to run.",
+                   "'high housing', a crash factor like 'speed', or 'fatal'. Then press Generate Report.",
                    className="field-hint"),
-            html.Div("Try one", className="field-label examples-label"),
+            html.Div("Examples (click to fill the search)", className="field-label examples-label"),
             html.Div(className="examples", children=[
                 html.Button(e, id={"type": "example", "index": i}, className="example-chip", n_clicks=0)
                 for i, e in enumerate(EXAMPLES)]),
         ]),
-        field("ZIP code", dcc.Dropdown(id="zip", options=ZIPS, value=None, placeholder="Type or pick a ZIP code",
+        field("ZIP code", dcc.Dropdown(id="zip", options=ZIPS, value=None, placeholder="Type a ZIP code...",
                                        className="dropdown"), "box-zip"),
-        field("Boroughs", pills("boroughs", [{"label": b.title(), "value": b} for b in BOROUGHS], BOROUGHS, multi=True),
-              "box-boroughs"),
-        field("Housing group", pills("group", ["All"] + GROUPS, "All"), "box-group",
-              "ZIP codes ranked by units completed 2018 to 2025."),
-        field("Housing type", pills("category", [{"label": "All", "value": "All"},
-                                                {"label": "New construction", "value": "New Construction"},
-                                                {"label": "Preservation", "value": "Preservation"}], "All"),
+        field("Borough", dcc.Dropdown(id="boroughs", options=[{"label": b.title(), "value": b} for b in BOROUGHS],
+                                      value=BOROUGHS, multi=True, className="dropdown dropdown-multi",
+                                      placeholder="All boroughs"), "box-boroughs"),
+        field("Housing group (ZIP level)", dcc.Dropdown(id="group", clearable=False, value="All",
+                                                        options=["All"] + GROUPS, className="dropdown"),
+              "box-group", "ZIP codes split into thirds by units completed 2018 to 2025."),
+        field("Housing category", dcc.Dropdown(id="category", clearable=False, value="All",
+                                               options=["All"] + CATEGORIES, className="dropdown"),
               "box-category"),
         html.Div(id="box-years", className="field", children=[
             html.Div(className="field-label field-label-row", children=[
@@ -481,21 +484,20 @@ sidebar = html.Aside(className="sidebar", **{"aria-label": "Report filters"}, ch
                             className="range"),
         ]),
         html.Div(className="sub-group", children=[
-            html.P("Crash filters apply to the map and the When & why charts.", className="sub-group-note"),
-            field("Crash outcome", pills("outcome", [{"label": "Any", "value": "Any crash"},
-                                                     {"label": "Injury", "value": "Injury crashes"},
-                                                     {"label": "Fatal", "value": "Fatal crashes"}], "Any crash"),
-                  "box-outcome"),
-            field("Contributing factor", dcc.Dropdown(id="factor", clearable=False, value="All",
-                                                      options=["All"] + FACTORS, className="dropdown",
-                                                      searchable=True), "box-factor"),
+            html.P("Crash filters apply to the map and the When & why charts (200k-crash sample).",
+                   className="sub-group-note"),
+            field("Crash factor (transport category)", dcc.Dropdown(id="factor", clearable=False, value="All",
+                                                                    options=["All"] + FACTORS,
+                                                                    className="dropdown"), "box-factor"),
+            field("Crash outcome", dcc.Dropdown(id="outcome", clearable=False, value="Any crash", options=OUTCOMES,
+                                                className="dropdown"), "box-outcome"),
         ]),
     ]),
     html.Div(className="sidebar-foot", children=[
         html.P(id="dirty-note", className="dirty-note", **{"aria-live": "polite"}),
         html.Div(className="sidebar-buttons", children=[
             html.Button("Reset", id="reset", n_clicks=0, className="btn btn-ghost btn-sm"),
-            html.Button("Update report", id="go", n_clicks=0, className="btn btn-action btn-grow"),
+            html.Button("Generate Report", id="go", n_clicks=0, className="btn btn-action btn-grow"),
         ]),
     ]),
 ])
@@ -512,7 +514,12 @@ main = html.Div(className="report", id="report", children=[
 
 findings = html.Section(id="findings", className="band", children=[
     html.Div(className="band-inner", children=[
-        html.H2("What we found", className="band-title"),
+        html.H2("The story", className="band-title"),
+        html.H3("Question", className="story-sub"),
+        html.P("Do the ZIP codes where affordable housing was completed between 2018 and 2025 also record more "
+               "traffic crashes? The answer shows where street-safety work should go alongside new housing.",
+               className="story-question"),
+        html.H3("What we found", className="story-sub"),
         html.Div(className="findings", children=[
             html.Article(className="finding", children=[
                 html.Span(rqs, className="rq-tag"),
@@ -520,11 +527,12 @@ findings = html.Section(id="findings", className="band", children=[
                 html.Button("See the charts", id={"type": "finding", "index": i}, n_clicks=0,
                             className="link-btn"),
             ]) for i, (rqs, title, text, _tab) in enumerate(FINDINGS)]),
-        html.H2("Read these results with care", className="band-title band-title-sm"),
+        html.H3("Limits", className="story-sub"),
         html.Div(className="limits", children=[
             html.Details(className="limit", children=[html.Summary(t), html.P(d)]) for t, d in LIMITS]),
-        html.P("How this helps NYC: agencies can use the ZIP ranking (RQ9) to prioritize street-safety work near "
-               "new housing and the timing heatmap (RQ5) to schedule enforcement.", className="helps"),
+        html.H3("How this helps NYC", className="story-sub"),
+        html.P("Agencies can use the ZIP ranking (RQ9) to prioritize street-safety work near new housing and the "
+               "timing heatmap (RQ5) to schedule enforcement.", className="helps"),
     ]),
 ])
 
@@ -556,14 +564,14 @@ about = html.Section(id="about", className="band band-white", children=[
 ])
 
 app.layout = html.Div(className="app", children=[
-    dcc.Store(id="applied", data=DEFAULT_APPLIED),
+    dcc.Store(id="applied", data=None),
     topbar, hero,
     html.Section(id="explore", className="workspace", children=[sidebar, main]),
     findings, about,
     html.Footer(className="footer", children=[
         html.Div(className="footer-inner", children=[
             html.Span("Data Engineering and Visualization, GIU. Milestone 1."),
-            html.Span("Data: NYC Open Data. Charts update from the filters above."),
+            html.Span("Data: NYC Open Data."),
         ])]),
 ])
 
@@ -593,6 +601,13 @@ def reset_controls(_):
     d = default_filters()
     return [d[c] for c in CONTROLS] + [""]
 
+@app.callback(Output("query", "value", allow_duplicate=True),
+              Input({"type": "example", "index": ALL}, "n_clicks"), prevent_initial_call=True)
+def fill_example(clicks):
+    if not any(clicks or []):
+        return no_update
+    return EXAMPLES[ctx.triggered_id["index"]]
+
 def controls_to_filters(mode, boroughs, group, zip_code, category, factor, outcome, years):
     return dict(boroughs=boroughs or [], years=[int(y) for y in years], group=group,
                 zip=zip_code if mode == "search" else None, category=category, factor=factor, outcome=outcome)
@@ -608,34 +623,25 @@ def applied_from_text(query):
                           "'preservation', a ZIP code, 'high housing', or a crash factor like 'speed'.")
     return dict(mode="text", query=q, f=f, seen=seen, error=None)
 
-@app.callback(Output("applied", "data"), Output("query", "value", allow_duplicate=True),
-              Input("go", "n_clicks"), Input("reset", "n_clicks"), Input("query", "n_submit"),
-              Input({"type": "example", "index": ALL}, "n_clicks"),
+@app.callback(Output("applied", "data"), Input("go", "n_clicks"),
               State("mode", "value"), [State(c, "value") for c in CONTROLS], State("query", "value"),
               prevent_initial_call=True)
-def apply_filters(_go, _reset, _submit, _examples, mode, boroughs, group, zip_code, category, factor, outcome,
-                  years, query):
-    trig = ctx.triggered_id
-    if trig == "reset":
-        return DEFAULT_APPLIED, no_update
-    if isinstance(trig, dict) and trig.get("type") == "example":
-        if not ctx.triggered[0]["value"]:
-            return no_update, no_update
-        q = EXAMPLES[trig["index"]]
-        return applied_from_text(q), q
-    if mode == "text" or trig == "query":
-        return applied_from_text(query), no_update
+def generate_report(_n, mode, boroughs, group, zip_code, category, factor, outcome, years, query):
+    """Generate Report is the only trigger: it snapshots the current filters (or the parsed search)."""
+    if mode == "text":
+        return applied_from_text(query)
     if mode == "search" and not zip_code:
-        return dict(mode="search", error="Pick a ZIP code first."), no_update
+        return dict(mode="search", error="Pick a ZIP code first.")
     f = controls_to_filters(mode, boroughs, group, zip_code, category, factor, outcome, years)
-    return dict(mode=mode, f=f, query="", seen=[], error=None), no_update
+    return dict(mode=mode, f=f, query="", seen=[], error=None)
 
 @app.callback(Output("go", "className"), Output("dirty-note", "children"),
               Input("mode", "value"), [Input(c, "value") for c in CONTROLS], Input("query", "value"),
               Input("applied", "data"))
 def mark_dirty(mode, boroughs, group, zip_code, category, factor, outcome, years, query, applied):
     base = "btn btn-action btn-grow"
-    applied = applied or {}
+    if not applied:                                   # nothing generated yet
+        return base, ""
     if applied.get("error"):
         dirty = True
     elif mode == "text":
@@ -647,7 +653,7 @@ def mark_dirty(mode, boroughs, group, zip_code, category, factor, outcome, years
                           f.get("zip"), f.get("category"), f.get("factor"), f.get("outcome"))
         dirty = norm(cur) != norm(af) or (applied.get("mode") == "text")
     if dirty:
-        return base + " is-dirty", "Your changes are not applied yet."
+        return base + " is-dirty", "Press Generate Report to apply your changes."
     return base, ""
 
 def summary_chips(f):
@@ -670,18 +676,20 @@ def summary_chips(f):
     return chips
 
 @app.callback(Output("summary", "children"), Output("kpis", "children"), Output("section", "children"),
-              Input("applied", "data"), Input("tab", "value"))
+              Output("tab", "style"), Input("applied", "data"), Input("tab", "value"))
 def render(applied, tab):
-    applied = applied or DEFAULT_APPLIED
+    hide_tabs = {"display": "none"}
+    if not applied:
+        return None, None, [empty_state()], hide_tabs
     if applied.get("error"):
-        return None, None, [notice(applied["error"], "warn")]
+        return None, None, [notice(applied["error"], "warn")], hide_tabs
     f = applied["f"]
     z, c, h, b = filter_data(f)
     lead = "Understood as" if applied.get("mode") == "text" else "Showing"
     summary = [html.Span(lead, className="summary-lead")] + [html.Span(t, className="chip") for t in summary_chips(f)]
     if z.empty and c.empty:
         return summary, None, [notice("No data matches these filters. Try a wider year range or remove a filter.",
-                                      "warn")]
+                                      "warn")], hide_tabs
 
     crashes_total = int(z["crash_count"].sum())
     units = int(z["total_units"].sum())
@@ -734,7 +742,7 @@ def render(applied, tab):
             chart_card("RQ4", "Crashes per 100 housing units, by borough",
                        "Higher means more crashes relative to the housing completed there.", fig_borough(b)),
         ]
-    return summary, kpis, cards
+    return summary, kpis, cards, {}
 
 @app.callback(Output("tab", "value"), Input({"type": "finding", "index": ALL}, "n_clicks"), prevent_initial_call=True)
 def open_finding(clicks):
